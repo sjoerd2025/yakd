@@ -107,6 +107,21 @@ npm run typecheck
   - Add `// @ts-check` after the license header to enable type checking for a file
   - Use JSDoc `@param` annotations for component props
   - Configuration in `jsconfig.json`
+- **Barrel exports**: Every feature directory has an `index.js` that re-exports all public modules
+  - Use `export * as api from './api'` for namespaced API exports
+  - Use `export * as selectors from './selectors'` for namespaced selector exports
+  - Use named exports for components: `export {PodsDetailPage} from './PodsDetailPage'`
+  - Rename generic components semantically: `export {List as PodsList} from './List'`
+  - Always import from the directory barrel, never from individual files:
+    ```javascript
+    // Correct
+    import {PodsList, api, selectors} from '../pods';
+    import {Card, Icon} from '../components';
+
+    // Wrong - bypasses the barrel
+    import {PodsList} from '../pods/List';
+    import {Card} from '../components/Card';
+    ```
 
 ## Testing
 
