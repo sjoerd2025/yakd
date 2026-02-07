@@ -96,8 +96,8 @@ const Footer = () => (
   <footer className='flex items-center p-3 text-sm bg-white border-t border-blue-700/75 text-gray-700'>
     <div>
       Copyright © 2020-{new Date().getFullYear()}{' '}
-      <Link href='https://www.marcnuri.com'>Marc Nuri</Link>{' '}
-      - Licensed under the{' '}
+      <Link href='https://www.marcnuri.com'>Marc Nuri</Link> - Licensed under
+      the{' '}
       <Link href='https://www.apache.org/licenses/LICENSE-2.0'>
         Apache License 2.0
       </Link>
