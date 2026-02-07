@@ -1,4 +1,4 @@
-# YAKD (Yet Another Kubernetes Dashboard)  - AI Agents Instructions
+# YAKD (Yet Another Kubernetes Dashboard) - AI Agents Instructions
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 
@@ -16,6 +16,7 @@ The project provides a web-based UI for managing Kubernetes and OpenShift cluste
   - `<resource>/` - Package per Kubernetes resource type (pods, deployments, services, etc.)
 - `src/main/frontend/` - React frontend application
   - `src/` - Frontend source code with per-resource directories
+  - `src/test-utils/` - Test utilities (createTestStore, parseHtml)
   - `build/` - Production build output (bundled into JAR)
 - `src/test/java/` - Backend tests
 - `src/main/resources/` - Quarkus configuration
@@ -158,6 +159,43 @@ Tests use:
 - **AssertJ** for assertions
 - **Awaitility** for async testing
 
+### End-to-End Integration Tests (Selenium + Kubernetes MockServer)
+
+**This is the preferred test type for testing full features.** These tests validate the entire stack (Backend + Frontend) using:
+- **Selenium/Chrome** to test the actual rendered UI
+- **Fabric8 Kubernetes MockServer** to simulate the Kubernetes API
+
+These tests are fast (no real cluster needed) and provide the highest confidence that features work correctly.
+
+**Test files**: `*IT.java` in `src/test/java/` (e.g., `HomeIT.java`, `PodLogsIT.java`, `PodExecIT.java`)
+
+**Key annotations:**
+```java
+@QuarkusTest
+@TestProfile(IntegrationTestProfile.class)
+public class MyFeatureIT {
+  @KubernetesTestServer
+  KubernetesServer kubernetes;  // Mock Kubernetes API
+
+  @TestHTTPResource
+  URL url;                      // Test server URL
+
+  WebDriver driver;             // Selenium WebDriver (auto-injected)
+}
+```
+
+**Test infrastructure** (in `src/test/java/com/marcnuri/yakd/selenium/`):
+- `IntegrationTestProfile.java` - Combines `@WithSelenium` and `@WithKubernetesTestServer`
+- `SeleniumTestResource.java` - Manages Chrome WebDriver lifecycle
+- `@WithSelenium` - Annotation to enable Selenium support
+
+**Pattern:**
+1. Set up mock Kubernetes resources using `kubernetes.getClient()`
+2. Mock API responses with `kubernetes.expect().get().withPath(...).andReturn(...)` if not covered by the CRUD mode
+3. Navigate to pages with `driver.get(url + "path")`
+4. Wait for elements with `FluentWait` and CSS selectors
+5. Assert on rendered content with AssertJ
+
 ### Frontend Tests (React/Vitest)
 
 ```bash
@@ -173,6 +211,155 @@ npm run test:watch
 Frontend tests use Vitest with:
 - Component tests using `renderToString` from react-dom/server
 - WebSocket tests with custom `ws-test-server.js` utility
+- Test utilities in `src/test-utils/` (createTestStore, parseHtml)
+
+### Test Examples
+
+**End-to-End Integration Test (Selenium + Kubernetes MockServer) - PREFERRED:**
+```java
+@QuarkusTest
+@TestProfile(IntegrationTestProfile.class)
+public class PodLogsIT {
+  @KubernetesTestServer
+  KubernetesServer kubernetes;
+
+  @TestHTTPResource
+  URL url;
+  WebDriver driver;
+  Wait<WebDriver> wait;
+
+  @BeforeEach
+  void setUp() {
+    wait = new FluentWait<>(driver)
+      .withTimeout(Duration.ofSeconds(10))
+      .pollingEvery(Duration.ofMillis(100))
+      .ignoring(NoSuchElementException.class);
+
+    // Create mock pod
+    kubernetes.getClient().pods().inNamespace("default").resource(new PodBuilder()
+      .withNewMetadata().withName("test-pod").withUid("test-uid").endMetadata()
+      .withNewSpec().withContainers(new ContainerBuilder()
+        .withName("container-1").withImage("busybox").build())
+      .endSpec()
+      .withNewStatus().withPhase("Running").endStatus()
+      .build()).createOr(NonDeletingOperation::update);
+
+    // Mock log endpoint
+    kubernetes.expect().get()
+      .withPath("/api/v1/namespaces/default/pods/test-pod/log?...")
+      .andReturn(200, "Hello from logs!")
+      .always();
+
+    // Navigate and wait for page
+    driver.navigate().to(url.toString() + "pods");
+    wait.until(d -> d.findElement(By.cssSelector("[data-testid='pod-list']")).isDisplayed());
+  }
+
+  @Test
+  void displaysLogs() {
+    assertThat(driver.findElement(By.cssSelector("[data-testid='pod-logs__content']")).getText())
+      .contains("Hello from logs!");
+  }
+}
+```
+
+**JavaScript (Vitest) - Nested describe with setup:**
+```javascript
+describe('FilterBar component tests', () => {
+  describe('rendering', () => {
+    test('should render as a div element', () => {
+      const doc = renderFilterBar();
+      const container = doc.body.firstChild;
+      expect(container.tagName.toLowerCase()).toBe('div');
+    });
+
+    test('should render with flex layout', () => {
+      const doc = renderFilterBar();
+      const container = doc.body.firstChild;
+      expect(container.classList.contains('flex')).toBe(true);
+    });
+  });
+
+  describe('namespace dropdown', () => {
+    test('should show selected namespace name when one is selected', () => {
+      const doc = renderFilterBar({
+        ui: {selectedNamespace: 'kube-system'}
+      });
+      const button = doc.querySelector('button');
+      expect(button.textContent).toContain('kube-system');
+    });
+  });
+});
+```
+
+**Java (JUnit 5) - Backend API test:**
+```java
+@QuarkusTest
+@WithKubernetesTestServer
+class PodTest {
+  @Inject
+  KubernetesClient kubernetesClient;
+
+  @Test
+  @DisplayName("GET /api/v1/pods/{namespace}/{name} - Should get the pod")
+  void get() {
+    kubernetesClient.pods().resource(new PodBuilder()
+      .withNewMetadata().withName("to-get").endMetadata().build())
+      .create();
+    when()
+      .get("/api/v1/pods/" + kubernetesClient.getConfiguration().getNamespace() + "/to-get")
+      .then()
+      .statusCode(200)
+      .body("metadata.name", is("to-get"));
+  }
+}
+```
+
+## Common Tasks
+
+### Adding a New Kubernetes Resource Type
+
+1. **Backend**: Create a new package in `src/main/java/com/marcnuri/yakd/<resource>/`
+   - `<Resource>Resource.java` - JAX-RS endpoints
+   - `<Resource>Service.java` - Business logic using Fabric8 client
+2. **Register in ApiResource.java**: Add `@Path` delegation to the new resource
+3. **Frontend**: Create a new directory in `src/main/frontend/src/<resource>/`
+   - `index.jsx` - Main exports
+   - `api.js` - API calls
+   - `selectors.js` - Redux selectors
+4. **Add to Redux store** in `src/main/frontend/src/redux/`
+5. **Add routing** in `src/main/frontend/src/router.jsx`
+
+### Running Full Validation
+
+```bash
+# Backend: run tests
+mvn verify
+
+# Frontend: lint, format, typecheck, and test
+cd src/main/frontend && npm run eslint && npm run prettier && npm run typecheck && npm test
+```
+
+## Troubleshooting
+
+### Frontend build fails with "frontend not found"
+
+The frontend must be built before the backend JAR can be packaged. Use the `-Pbuild-frontend` profile:
+```bash
+mvn clean package -Pbuild-frontend
+```
+
+### E2E integration tests fail with "ChromeDriver" errors
+
+The end-to-end tests (`*IT.java` with `IntegrationTestProfile`) require Chrome to be installed. The tests run headless by default. Ensure Chrome is available in your PATH. Switch to headful mode if necessary and check with the human what's actually rendering.
+
+### Tests fail with "Connection refused" on port 8080
+
+When running backend tests, ensure no other Quarkus instance is running on port 8080. The `@QuarkusTest` annotation starts its own test server.
+
+### License header check fails in CI
+
+All source files require Apache License 2.0 headers. Add the header to new files or use your IDE's template feature to include it automatically.
 
 ## Important Notes
 
