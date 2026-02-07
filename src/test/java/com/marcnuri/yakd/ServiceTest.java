@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
@@ -52,15 +52,15 @@ class ServiceTest {
 
   @Test
   @DisplayName("DELETE /api/v1/services/{namespace}/{name} - Should delete the service")
-  void delete() throws Exception {
+  void delete() {
     kubernetesClient.services().resource(new ServiceBuilder().withNewMetadata().withName("to-delete").endMetadata().build())
       .create();
-    final var noResourceFuture = kubernetesClient.services().withName("to-delete").informOnCondition(List::isEmpty);
     when()
       .delete("/api/v1/services/" + kubernetesClient.getConfiguration().getNamespace() + "/to-delete")
       .then()
       .statusCode(204);
-    noResourceFuture.get(10, TimeUnit.SECONDS);
+    kubernetesClient.services().withName("to-delete")
+      .waitUntilCondition(Objects::isNull, 10, TimeUnit.SECONDS);
   }
 
   @Test

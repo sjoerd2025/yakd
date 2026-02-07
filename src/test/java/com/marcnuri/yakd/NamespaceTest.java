@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.when;
@@ -63,16 +63,16 @@ class NamespaceTest {
 
   @Test
   @DisplayName("DELETE /api/v1/namespaces/{name} - Should delete the namespace")
-  void delete() throws Exception {
+  void delete() {
     kubernetesClient.namespaces()
       .resource(new NamespaceBuilder().withNewMetadata().withName("to-delete").endMetadata().build())
       .create();
-    final var noResourceFuture = kubernetesClient.namespaces().withName("to-delete").informOnCondition(List::isEmpty);
     when()
       .delete("/api/v1/namespaces/to-delete")
       .then()
       .statusCode(204);
-    noResourceFuture.get(10, TimeUnit.SECONDS);
+    kubernetesClient.namespaces().withName("to-delete")
+      .waitUntilCondition(Objects::isNull, 10, TimeUnit.SECONDS);
   }
 
   @Test
