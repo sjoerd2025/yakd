@@ -1,6 +1,7 @@
 # YAKD - Yet Another Kubernetes Dashboard
 
-[![Docker Image Version (latest semver)](https://img.shields.io/docker/v/marcnuri/yakd)](https://hub.docker.com/r/marcnuri/yakd)
+[![GHCR Version](https://ghcr-badge.egpl.dev/manusa/yakd/latest_tag?ignore=snapshot*&label=version)](https://github.com/manusa/yakd/pkgs/container/yakd)
+[![GHCR Pulls](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2Fmanusa%2Fyakd%2Fyakd&query=downloadCount&label=GHCR%20Pulls)](https://github.com/manusa/yakd/pkgs/container/yakd)
 [![Docker Pulls](https://img.shields.io/docker/pulls/marcnuri/yakd)](https://hub.docker.com/r/marcnuri/yakd)
 
 

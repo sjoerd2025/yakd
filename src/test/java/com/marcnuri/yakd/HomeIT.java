@@ -82,7 +82,7 @@ public class HomeIT {
   @Test
   void hasFooter() {
     assertThat(driver.findElement(By.cssSelector(".dashboard-page footer")).getText())
-      .matches("Copyright © \\d{4} - Marc Nuri - Licensed under the Apache License 2.0");
+      .matches("Copyright © 2020-\\d{4} Marc Nuri - Licensed under the Apache License 2.0");
   }
 
   @Test
